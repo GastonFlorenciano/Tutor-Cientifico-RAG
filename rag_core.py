@@ -93,7 +93,7 @@ def get_rag_pipeline():
         )
         print("-> Base de datos cargada.")
 
-    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
 
     def format_docs_with_sources(docs):
         return "\n\n---\n\n".join(

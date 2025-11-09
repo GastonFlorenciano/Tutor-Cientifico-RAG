@@ -5,7 +5,6 @@ langchain-text-splitters
 langchain-ollama
 langchain-chroma
 langchain-google-genai
-langchain-google-vertexai
 chromadb
 pypdf
 streamlit

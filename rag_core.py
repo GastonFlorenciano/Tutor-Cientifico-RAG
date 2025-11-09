@@ -5,7 +5,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.prompts import PromptTemplate
-from langchain_google_vertexai import ChatVertexAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
@@ -122,7 +122,8 @@ def get_rag_pipeline():
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
 
     print("Conectando a Google VertexAI (LLM)...")
-    llm = ChatVertexAI(
+    llm = ChatGoogleGenerativeAI(
+        api_key=os.getenv("GOOGLE_API_KEY"),
         model=LLM_MODEL,
         temperature=0.3
     )

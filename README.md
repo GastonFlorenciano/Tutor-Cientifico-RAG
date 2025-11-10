@@ -17,12 +17,6 @@ Tasks" (Lewis et al., 2020)
 
 ---
 
-### 🚀 Demo 
-
-Aquí puedes ver el chatbot en funcionamiento, respondiendo una pregunta sobre un concepto técnico y citando correctamente su fuente.
-
-![Demo del Tutor RAG](./RAG.gif)
-
 ### 🎯 El Problema y la Solución (Caso de Uso)
 
 * **El Problema:** Un estudiante necesita consultar conceptos técnicos complejos de los papers fundacionales (ej. "¿Qué es la 'atención' en un Transformer?"). El sistema debe ser capaz de explicar estos conceptos basándose exclusivamente en el contenido de los tres papers.
@@ -38,8 +32,8 @@ Aquí puedes ver el chatbot en funcionamiento, respondiendo una pregunta sobre u
 * **Arquitectura:** RAG (Retrieval-Augmented Generation) 
 * **Framework RAG:** LangChain (utilizando LCEL) 
 * **Base de Datos Vectorial:** ChromaDB (Persistente) 
-* **Modelo de Embedding:** Ollama (`nomic-embed-text`) 
-* **Modelo de Lenguaje (LLM):** Google Vertex AI (`gemini-2.5-flash`)
+* **Modelo de Embedding:** Hugging Face Sentence Transformers (`all-MiniLM-L6-v2`) 
+* **Modelo de Lenguaje (LLM):** Google Gemini (`gemini-2.5-flash`)
 * **Frontend:** Streamlit 
 * **Lenguaje:** Python
 
@@ -74,21 +68,16 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**4. Configurar Modelos y Credenciales (Gemini y Ollama):**
+**4. Configurar Credenciales (Google Gemini):**
 
-* **Google AI (LLM - API Key):** El proyecto utiliza la clave API de Google AI Studio (no de Google Cloud).
+* **Google AI (LLM - API Key):** El proyecto utiliza la clave API de Google AI Studio.
     1.  Crea un archivo llamado **`.env`** en la raíz del proyecto.
     2.  Añade tu clave al archivo, siguiendo este formato:
         ```text
         GOOGLE_API_KEY="TU_CLAVE_API_VA_AQUI"
         ```
 
-* **Ollama (Modelo de Embedding):** El proyecto depende de que el servidor local de Ollama esté corriendo.
-    1.  Asegúrate de tener [Ollama instalado y ejecutándose](https://ollama.com/download).
-    2.  Descarga el modelo de embeddings necesario en tu terminal:
-        ```bash
-        ollama pull nomic-embed-text
-        ```
+**Nota:** El modelo de embeddings de Hugging Face se descarga automáticamente la primera vez que ejecutas el proyecto (solo toma ~10 segundos). No requiere configuración adicional.
 
 ### ▶️ Instrucciones de Uso
 

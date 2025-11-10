@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_ollama import OllamaEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -15,7 +15,7 @@ load_dotenv()
 # Constantes del Proyecto
 DATA_FOLDER = "./docs"
 PERSIST_DIRECTORY = "./chroma_db_tutor_ia"
-EMBEDDING_MODEL = "nomic-embed-text"
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 COLLECTION_NAME = "ia_papers_tutor"
 LLM_MODEL = "gemini-2.5-flash"
 
@@ -62,15 +62,20 @@ def split_documents(documents):
 # Función de Creación del Pipeline
 
 def get_rag_pipeline():
-    """
-    Ensambla y devuelve el pipeline RAG completo (rag_chain).
-    """
-    print("Conectando a Ollama (Embedding)...")
+    """Ensambla y devuelve el pipeline RAG completo."""
+    # ==========================================
+    print("Cargando modelo de embeddings de Hugging Face...")
     try:
-        embedding_model = OllamaEmbeddings(model=EMBEDDING_MODEL)
+        embedding_model = HuggingFaceEmbeddings(
+            model_name=EMBEDDING_MODEL,                    # Modelo de Sentence Transformers
+            model_kwargs={'device': 'cpu'},                # CPU (cambia a 'cuda' si tienes GPU)
+            encode_kwargs={'normalize_embeddings': True}   # Normaliza vectores para mejor similitud
+        )
+        print("-> Modelo de embeddings cargado correctamente")
     except Exception as e:
-        print(f"ERROR: No se pudo conectar a Ollama. ¿Está corriendo? {e}")
+        print(f"ERROR: No se pudo cargar el modelo de Hugging Face. {e}")
         return None
+    # ==========================================
 
     print("Cargando/Creando Vector Store (ChromaDB)...")
     if not os.path.exists(PERSIST_DIRECTORY):
@@ -101,27 +106,26 @@ def get_rag_pipeline():
             for doc in docs
         )
 
-    template = """
-    Eres un "Tutor de Investigación" experto en IA. Tu única fuente de conocimiento son los siguientes fragmentos de papers fundacionales.
+    template = """Eres un "Tutor de Investigación" experto en IA. Tu única fuente de conocimiento son los siguientes fragmentos de papers fundacionales.
 
-    REGLAS ESTRICTAS:
-    1. Responde la pregunta del estudiante basándote *única y exclusivamente* en el contexto proporcionado.
-    2. Al final de tu respuesta, DEBES citar la fuente exacta del paper que usaste (ej: "Fuente: Attention Is All You Need (Vaswani et al., 2017)").
-    3. Si el contexto no contiene la información para responder, DEBES responder exactamente: "Lo siento, no tengo información sobre eso en mis documentos fundacionales."
+REGLAS ESTRICTAS:
+1. Responde la pregunta del estudiante basándote *única y exclusivamente* en el contexto proporcionado.
+2. Al final de tu respuesta, DEBES citar la fuente exacta del paper que usaste (ej: "Fuente: Attention Is All You Need (Vaswani et al., 2017)").
+3. Si el contexto no contiene la información para responder, DEBES responder exactamente: "Lo siento, no tengo información sobre eso en mis documentos fundacionales."
 
-    ---
-    CONTEXTO PROPORCIONADO:
-    {context}
-    ---
+---
+CONTEXTO PROPORCIONADO:
+{context}
+---
 
-    PREGUNTA DEL ESTUDIANTE:
-    {question}
+PREGUNTA DEL ESTUDIANTE:
+{question}
 
-    RESPUESTA DEL TUTOR:
-    """
+RESPUESTA DEL TUTOR:
+"""
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
 
-    print("Conectando a Google VertexAI (LLM)...")
+    print("Conectando a Google Gemini (LLM)...")
     llm = ChatGoogleGenerativeAI(
         api_key=os.getenv("GOOGLE_API_KEY"),
         model=LLM_MODEL,

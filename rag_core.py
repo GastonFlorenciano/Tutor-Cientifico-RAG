@@ -2,10 +2,9 @@ import os
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_ollama import OllamaEmbeddings
+from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_chroma import Chroma
 from langchain_core.prompts import PromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
@@ -13,11 +12,12 @@ from langchain_core.output_parsers import StrOutputParser
 load_dotenv()
 
 # Constantes del Proyecto
-DATA_FOLDER = "./docs"
-PERSIST_DIRECTORY = "./chroma_db_tutor_ia"
-EMBEDDING_MODEL = "nomic-embed-text"
-COLLECTION_NAME = "ia_papers_tutor"
-LLM_MODEL = "gemini-2.5-flash"
+DATA_FOLDER = os.getenv("DATA_FOLDER", "./docs")
+PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIRECTORY", "./chroma_db_tutor_ia")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+COLLECTION_NAME = os.getenv("COLLECTION_NAME", "ia_papers_tutor")
+LLM_MODEL = os.getenv("LLM_MODEL", "mistral")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 PAPERS = {
     "AIAYN.pdf": "Attention Is All You Need (Vaswani et al., 2017)",
@@ -42,7 +42,7 @@ def load_and_tag_pdfs(data_dir: str, paper_sources: dict):
             for page in pages:
                 page.metadata["source"] = source_title
             documents.extend(pages)
-            print(f"-> Cargado: {filename}")
+            print(f"-> Cargado: {filename} ({len(pages)} páginas)")
         except Exception as e:
             print(f"ERROR al cargar {file_path}: {e}")
     return documents
@@ -64,12 +64,17 @@ def split_documents(documents):
 def get_rag_pipeline():
     """
     Ensambla y devuelve el pipeline RAG completo (rag_chain).
+    Usa Mistral de Ollama como LLM.
     """
     print("Conectando a Ollama (Embedding)...")
     try:
-        embedding_model = OllamaEmbeddings(model=EMBEDDING_MODEL)
+        embedding_model = OllamaEmbeddings(
+            model=EMBEDDING_MODEL,
+            base_url=OLLAMA_BASE_URL
+        )
+        print(f"✓ Embedding model '{EMBEDDING_MODEL}' conectado vía Ollama.")
     except Exception as e:
-        print(f"ERROR: No se pudo conectar a Ollama. ¿Está corriendo? {e}")
+        print(f"ERROR: No se pudo conectar a Ollama. ¿Está corriendo en {OLLAMA_BASE_URL}? {e}")
         return None
 
     print("Cargando/Creando Vector Store (ChromaDB)...")
@@ -93,7 +98,7 @@ def get_rag_pipeline():
         )
         print("-> Base de datos cargada.")
 
-    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    retriever = vector_store.as_retriever(search_kwargs={"k": 2})  # CAMBIO: 2 en lugar de 3
 
     def format_docs_with_sources(docs):
         return "\n\n---\n\n".join(
@@ -101,32 +106,39 @@ def get_rag_pipeline():
             for doc in docs
         )
 
-    template = """
-    Eres un "Tutor de Investigación" experto en IA. Tu única fuente de conocimiento son los siguientes fragmentos de papers fundacionales.
+    template = """Eres un "Tutor de Investigación" experto en IA. Tu única fuente de conocimiento son los siguientes fragmentos de papers fundacionales.
 
-    REGLAS ESTRICTAS:
-    1. Responde la pregunta del estudiante basándote *única y exclusivamente* en el contexto proporcionado.
-    2. Al final de tu respuesta, DEBES citar la fuente exacta del paper que usaste (ej: "Fuente: Attention Is All You Need (Vaswani et al., 2017)").
-    3. Si el contexto no contiene la información para responder, DEBES responder exactamente: "Lo siento, no tengo información sobre eso en mis documentos fundacionales."
+REGLAS ESTRICTAS:
+1. Responde la pregunta del estudiante basándote *única y exclusivamente* en el contexto proporcionado.
+2. Al final de tu respuesta, DEBES citar la fuente exacta del paper que usaste (ej: "Fuente: Attention Is All You Need (Vaswani et al., 2017)").
+3. Si el contexto no contiene la información para responder, DEBES responder exactamente: "Lo siento, no tengo información sobre eso en mis documentos fundacionales."
 
-    ---
-    CONTEXTO PROPORCIONADO:
-    {context}
-    ---
+---
+CONTEXTO PROPORCIONADO:
+{context}
+---
 
-    PREGUNTA DEL ESTUDIANTE:
-    {question}
+PREGUNTA DEL ESTUDIANTE:
+{question}
 
-    RESPUESTA DEL TUTOR:
-    """
+RESPUESTA DEL TUTOR:"""
+    
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
 
-    print("Conectando a Google VertexAI (LLM)...")
-    llm = ChatGoogleGenerativeAI(
-        api_key=os.getenv("GOOGLE_API_KEY"),
-        model=LLM_MODEL,
-        temperature=0.3
-    )
+    print(f"Conectando a Ollama LLM (modelo: {LLM_MODEL})...")
+    try:
+        llm = ChatOllama(
+            model=LLM_MODEL,
+            base_url=OLLAMA_BASE_URL,
+            temperature=0.2,  # CAMBIO: Reducido de 0.3
+            num_predict=150,  # CAMBIO: Reducido de 256
+            top_k=40,         # NUEVO: Limita opciones
+            top_p=0.9         # NUEVO: Nucleus sampling
+        )
+        print(f"✓ LLM '{LLM_MODEL}' conectado exitosamente vía Ollama.")
+    except Exception as e:
+        print(f"ERROR: No se pudo conectar a Ollama LLM. {e}")
+        return None
     
     rag_chain = (
         {"context": retriever | format_docs_with_sources, "question": RunnablePassthrough()}
@@ -137,8 +149,7 @@ def get_rag_pipeline():
     
     print("-> Pipeline RAG creado exitosamente.")
     return rag_chain
-
 # Inicialización
 print("Iniciando rag_core.py...")
 RAG_CHAIN_GLOBAL = get_rag_pipeline()
-print("¡rag_core.py listo! El objeto 'RAG_CHAIN_GLOBAL' está preparado.")
+print("¡rag_core.py listo! El objeto 'RAG_CHAIN_GLOBAL' está preparado con Mistral.")

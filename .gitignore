@@ -16,3 +16,15 @@ build/
 *.swp
 *.swo
 .ipynb_checkpoints
+node_modules
+dist
+.env
+.env.local
+*.log
+.DS_Store
+.next
+.turbo
+coverage
+.vscode
+.idea
+pnpm-lock.yaml

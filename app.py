@@ -1,60 +1,106 @@
-# app.py
-# Este es el FRONTEND de tu aplicación.
-# Usa Streamlit para crear la interfaz de chat.
-
 import streamlit as st
-import rag_core  # Importa nuestro "motor" (backend)
+import uuid
+import rag_core
 
-# --- 1. Configuración de la Página ---
-# (Esto le da un título y un ícono a la pestaña del navegador)
+# ----------------------------------
+# 1. CONFIGURACIÓN DE LA PÁGINA
+# ----------------------------------
 st.set_page_config(
     page_title="Tutor de IA",
     page_icon="🤖",
     layout="centered"
 )
 
-# --- 2. Título y Descripción ---
 st.title("🤖 Tutor de Investigación de IA")
 st.markdown("Chatea con los papers fundacionales (Attention, BERT, RAG).")
 
-# --- 3. Inicialización del Historial de Chat ---
-# Streamlit necesita "session_state" para recordar la conversación.
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# ----------------------------------
+# 2. ESTADO GLOBAL
+# ----------------------------------
+# conversations = { chat_id: { "messages": [], "title": "" } }
+if "conversations" not in st.session_state:
+    st.session_state.conversations = {}
 
-# --- 4. Botón de Limpieza --- (Requisito del PDF [cite: 44])
-# Colocamos un botón en la barra lateral
+if "current_chat_id" not in st.session_state:
+    st.session_state.current_chat_id = None
+
+
+# ----------------------------------
+# 3. FUNCIÓN PARA CREAR NUEVO CHAT
+# ----------------------------------
+def create_new_chat():
+    new_id = str(uuid.uuid4())[:8]
+    st.session_state.conversations[new_id] = {
+        "messages": [],
+        "title": ""  # Vacío hasta que el usuario pregunte algo
+    }
+    st.session_state.current_chat_id = new_id
+
+
+# Si no hay chat aún, crear uno
+if st.session_state.current_chat_id is None:
+    create_new_chat()
+
+
+# ----------------------------------
+# 4. SIDEBAR (HISTORIAL)
+# ----------------------------------
 with st.sidebar:
-    st.subheader("Opciones")
-    if st.button("Limpiar Chat"):
-        st.session_state.messages = []
-        st.rerun() # Refresca la página
+    st.subheader("Historial de Chats")
 
-# --- 5. Mostrar Mensajes Antiguos ---
-# Itera sobre el historial guardado y lo muestra en la interfaz.
-for message in st.session_state.messages:
+    for chat_id, data in st.session_state.conversations.items():
+
+        # Nombre del chat:
+        # Si todavía no tiene título → mostrar "(Chat nuevo)"
+        title = data["title"] if data["title"] else "(Chat nuevo)"
+
+        if st.button(title, key=f"btn_{chat_id}"):
+            st.session_state.current_chat_id = chat_id
+            st.rerun()
+
+    st.markdown("---")
+
+    if st.button("➕ Nuevo Chat"):
+        create_new_chat()
+        st.rerun()
+
+
+# ----------------------------------
+# 5. OBTENER EL CHAT ACTIVO
+# ----------------------------------
+chat_id = st.session_state.current_chat_id
+chat_data = st.session_state.conversations[chat_id]
+messages = chat_data["messages"]
+
+
+# ----------------------------------
+# 6. MOSTRAR MENSAJES ANTERIORES
+# ----------------------------------
+for message in messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- 6. Lógica del Chat (Input y Respuesta) ---
-# st.chat_input() crea la barra de chat en la parte inferior.
-if prompt := st.chat_input("¿Qué es la 'atención' en un Transformer?"):
-    
-    # 1. Añadir y mostrar el mensaje del usuario
-    st.session_state.messages.append({"role": "user", "content": prompt})
+
+# ----------------------------------
+# 7. INPUT DEL USUARIO
+# ----------------------------------
+if prompt := st.chat_input("Escribe tu mensaje..."):
+
+    # Guardar el mensaje del usuario
+    messages.append({"role": "user", "content": prompt})
+
+    # Si es el primer mensaje → usarlo como título del chat
+    if chat_data["title"] == "":
+        chat_data["title"] = prompt[:40] + ("..." if len(prompt) > 40 else "")
+
+    # Mostrar mensaje del usuario
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Generar y mostrar la respuesta del asistente (RAG)
+    # Respuesta del asistente
     with st.chat_message("assistant"):
-        # Usamos el spinner para mostrar que "está pensando"
         with st.spinner("Pensando..."):
-            
-            # ¡AQUÍ ES DONDE LLAMAMOS AL BACKEND!
-            # Usamos la variable RAG_CHAIN_GLOBAL que creamos en rag_core.py
             response = rag_core.RAG_CHAIN_GLOBAL.invoke(prompt)
-            
             st.markdown(response)
-    
-    # 3. Guardar la respuesta del asistente en el historial
-    st.session_state.messages.append({"role": "assistant", "content": response})
+
+    messages.append({"role": "assistant", "content": response})
